@@ -1,1 +1,1 @@
-Simple aamplifier control
+Simple amplifier control
