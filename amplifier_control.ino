@@ -56,11 +56,27 @@ bool acceptData = false;
 int powerStatus = 0;
 unsigned int loopToSleep = 0;
 
+//Variables for front side button
+int PowerPin = 2;
+int PowerLed = 8;
+int powerButtonState;
+
+// Variables for thermistors
+int Thermistor1Pin = 0;
+int Thermistor2Pin = 1;
+int Vo1;
+int Vo2;
+float R1 = 10000;
+float logR2, R2, T1, T2;
+float c1 = 1.009249522e-03, c2 = 2.378405444e-04, c3 = 2.019202697e-07;
+
 // the setup function runs once when you press reset or power the board
 void setup() {
   // initialize digital pin LED_BUILTIN as an output.
   pinMode(13, OUTPUT);
   pinMode(12, OUTPUT);
+  pinMode(PowerPin, INPUT_PULLUP);
+  pinMode(PowerLed, OUTPUT);
 
     Serial.begin(115200);
 #if defined(__AVR_ATmega32U4__) || defined(SERIAL_PORT_USBVIRTUAL) || defined(SERIAL_USB) || defined(ARDUINO_attiny3217)
@@ -90,12 +106,14 @@ void setup() {
 void wakeUp(){
   Serial.println("Interupt fired!");
   sleep_disable();
+  detachInterrupt(0);
   detachInterrupt(1);
 }
 
 void GoingToSleep(){
   Serial.println("Going to sleep!");
   sleep_enable();
+  attachInterrupt(0,wakeUp,LOW);
   attachInterrupt(1,wakeUp,LOW);
   set_sleep_mode(SLEEP_MODE_PWR_DOWN);
   digitalWrite(13, HIGH);
@@ -103,6 +121,63 @@ void GoingToSleep(){
   sleep_cpu();
   Serial.println("Just woke up!");
   
+}
+
+void PowerUp(){
+  digitalWrite(12, 1);
+  powerStatus = 1;
+  delay(1000);
+}
+
+void PowerDown(){
+   digitalWrite(12, 0);
+   powerStatus = 0;
+   delay(1000);
+}
+
+void FrontPowerButton() {
+  digitalWrite(PowerLed, LOW);
+  //PowerButton
+   powerButtonState = digitalRead(PowerPin);
+   if(powerButtonState == LOW){
+    if (powerStatus) {
+      PowerDown();
+     } else {
+      PowerUp();
+     }
+   }
+
+   
+   // LED
+   if (powerStatus) {
+    digitalWrite(PowerLed, HIGH);
+   } else {
+    digitalWrite(PowerLed, LOW);
+   }
+}
+
+void TemperatureCheck(){
+  Vo1 = analogRead(Thermistor1Pin);
+  Vo2 = analogRead(Thermistor2Pin);
+  //Calculating Thermistor 1
+  R2 = R1 * (1023.0 / (float)Vo1 - 1.0);
+  logR2 = log(R2);
+  T1 = (1.0 / (c1 + c2*logR2 + c3*logR2*logR2*logR2));
+  T1 = T1 - 273.15;
+
+  Serial.print("Temperature 1: "); 
+  Serial.print(T1);
+  Serial.println(" C"); 
+
+  //Calculating Thermistor 2
+  R2 = R1 * (1023.0 / (float)Vo2 - 1.0);
+  logR2 = log(R2);
+  T2 = (1.0 / (c1 + c2*logR2 + c3*logR2*logR2*logR2));
+  T2 = T2 - 273.15;
+
+  Serial.print("Temperature 2: "); 
+  Serial.print(T2);
+  Serial.println(" C"); 
 }
 
 // the loop function runs over and over again forever
@@ -160,12 +235,10 @@ void loop() {
               case POWER_CODE:
                 IrReceiver.stop();
                 if(powerStatus == 1){
-                  digitalWrite(12, 0);
-                  powerStatus = 0;
+                 PowerDown();
                 } else {
                    IrReceiver.stop();
-                  digitalWrite(12, 1);
-                  powerStatus = 1;
+                  PowerUp();
                 }
                 delay(500);
                 IrReceiver.start();
@@ -177,10 +250,14 @@ void loop() {
           }
         }
     }
+    FrontPowerButton();
+    TemperatureCheck();
     delay(50);
     loopToSleep++;
     if(loopToSleep == 200){
       loopToSleep = 0;
-      GoingToSleep();
+      if (powerStatus == 0){
+        GoingToSleep();
+      }
     }
 }
