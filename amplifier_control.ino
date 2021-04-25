@@ -46,6 +46,7 @@ unsigned int loopToSleep = 0;
 int PowerPin = 2;
 int PowerLed = 8;
 int powerButtonState;
+int prevPowerButtonState = HIGH;
 
 // Variables for thermistors
 int Thermistor1Pin = 0;
@@ -113,7 +114,7 @@ void wakeUp(){
 void GoingToSleep(){
   Serial.println("Going to sleep!");
   sleep_enable();
-  attachInterrupt(0,wakeUp,LOW);
+  attachInterrupt(0,PowerUp,LOW);
   attachInterrupt(1,wakeUp,LOW);
   set_sleep_mode(SLEEP_MODE_PWR_DOWN);
   digitalWrite(13, HIGH);
@@ -129,6 +130,7 @@ void GoingToSleep(){
  * Power on the equipment
  */
 void PowerUp(){
+  Serial.println("Powering Up...");
   digitalWrite(12, 1);
   powerStatus = 1;
   delay(1000);
@@ -140,6 +142,7 @@ void PowerUp(){
  * Power off the equipment
  */
 void PowerDown(){
+  Serial.println("Powering Down...");
    digitalWrite(12, 0);
    powerStatus = 0;
    delay(1000);
@@ -151,10 +154,10 @@ void PowerDown(){
  * Managing the state of the button and the LED
  */
 void FrontPowerButton() {
-  digitalWrite(PowerLed, LOW);
   //PowerButton
+   digitalWrite(PowerLed, LOW);
    powerButtonState = digitalRead(PowerPin);
-   if(powerButtonState == LOW){
+   if(powerButtonState != prevPowerButtonState){
     if (powerStatus) {
       PowerDown();
      } else {
@@ -162,13 +165,12 @@ void FrontPowerButton() {
      }
    }
 
-   
-   // LED
+  //  LED
    if (powerStatus) {
     digitalWrite(PowerLed, HIGH);
    } else {
     digitalWrite(PowerLed, LOW);
-   }
+   }  
 }
 
 /*
@@ -278,17 +280,17 @@ void TemperatureCheck(){
 
 // the loop function runs over and over again forever
 void loop() {
-    IrReceiverHandle();
-    FrontPowerButton();
-    TemperatureCheck();
-    delay(50);
-    // Looping some cycles before going to sleep
-    loopToSleep++;
-    if(loopToSleep == 200){
-      loopToSleep = 0;
-      // Going to sleep only on power off status
-      if (powerStatus == 0){
-        GoingToSleep();
-      }
+  FrontPowerButton();
+  IrReceiverHandle();
+  TemperatureCheck();
+  delay(50);
+  // Looping some cycles before going to sleep
+  loopToSleep++;
+  if(loopToSleep == 10){
+    loopToSleep = 0;
+    // Going to sleep only on power off status
+    if (powerStatus == 0){
+      GoingToSleep();
     }
+  }
 }
