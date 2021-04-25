@@ -1,25 +1,11 @@
 /*
-  Blink
+  Remote Control
+  by nkostop
 
-  Turns an LED on for one second, then off for one second, repeatedly.
+  Remote Control for audio using Front Panel Push/Led Switch,
+  beefcake relay for switch on and off,
+  IR remote Control and Thermistors for temperature measurements.
 
-  Most Arduinos have an on-board LED you can control. On the UNO, MEGA and ZERO
-  it is attached to digital pin 13, on MKR1000 on pin 6. LED_BUILTIN is set to
-  the correct LED pin independent of which board is used.
-  If you want to know what pin the on-board LED is connected to on your Arduino
-  model, check the Technical Specs of your board at:
-  https://www.arduino.cc/en/Main/Products
-
-  modified 8 May 2014
-  by Scott Fitzgerald
-  modified 2 Sep 2016
-  by Arturo Guadalupi
-  modified 8 Sep 2016
-  by Colby Newman
-
-  This example code is in the public domain.
-
-  http://www.arduino.cc/en/Tutorial/Blink
 */
 
 #include <Arduino.h>
@@ -103,6 +89,12 @@ void setup() {
     Serial.println(F(" us are subtracted from all marks and added to all spaces for decoding"));
 }
 
+/*
+ * wakeUp Function
+ *
+ * Interrupts fired when remote control is sending a signal
+ * or front panel switch is pushed
+ */
 void wakeUp(){
   Serial.println("Interupt fired!");
   sleep_disable();
@@ -110,6 +102,14 @@ void wakeUp(){
   detachInterrupt(1);
 }
 
+/*
+ * GoingToSleep Function
+ *
+ * Getting arduino (uno, mini, mini pro etc) to sleep
+ * Attaching interrupts to call wakeUp when 
+ * remote control is sending a signal
+ * or front panel switch is pushed
+ */
 void GoingToSleep(){
   Serial.println("Going to sleep!");
   sleep_enable();
@@ -123,18 +123,33 @@ void GoingToSleep(){
   
 }
 
+/*
+ * PowerUp Function
+ *
+ * Power on the equipment
+ */
 void PowerUp(){
   digitalWrite(12, 1);
   powerStatus = 1;
   delay(1000);
 }
 
+/*
+ * PowerDown Function
+ *
+ * Power off the equipment
+ */
 void PowerDown(){
    digitalWrite(12, 0);
    powerStatus = 0;
    delay(1000);
 }
 
+/*
+ * FrontPanelButton Function
+ *
+ * Managing the state of the button and the LED
+ */
 void FrontPowerButton() {
   digitalWrite(PowerLed, LOW);
   //PowerButton
@@ -156,6 +171,11 @@ void FrontPowerButton() {
    }
 }
 
+/*
+ * TemperatureCheck Function
+ *
+ * Thermistor checking function
+ */
 void TemperatureCheck(){
   Vo1 = analogRead(Thermistor1Pin);
   Vo2 = analogRead(Thermistor2Pin);
@@ -180,9 +200,13 @@ void TemperatureCheck(){
   Serial.println(" C"); 
 }
 
-// the loop function runs over and over again forever
-void loop() {
-    /*
+/*
+ * IrReceiverHandle Function
+ *
+ * Power off the equipment
+ */
+ void IrReceiverHandle() {
+   /*
      * Check if received data is available and if yes, try to decode it.
      * Decoded result is in the IrReceiver.decodedIRData structure.
      *
@@ -250,12 +274,19 @@ void loop() {
           }
         }
     }
+ }
+
+// the loop function runs over and over again forever
+void loop() {
+    IrReceiverHandle();
     FrontPowerButton();
     TemperatureCheck();
     delay(50);
+    // Looping some cycles before going to sleep
     loopToSleep++;
     if(loopToSleep == 200){
       loopToSleep = 0;
+      // Going to sleep only on power off status
       if (powerStatus == 0){
         GoingToSleep();
       }
