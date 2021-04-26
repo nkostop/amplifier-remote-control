@@ -57,7 +57,7 @@ int Vo2;
 float R1 = 10000;
 float logR2, R2, T1, T2;
 float c1 = 1.306013916e-03, c2 = 2.136446243e-04, c3 = 1.035851727e-07;
-float thermalShutdown = 70.00;
+float thermalShutdown = 75.00;
 float thermalRestart = 65.00;
 
 // the setup function runs once when you press reset or power the board
