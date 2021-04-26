@@ -40,6 +40,7 @@
 // variables for enabling relays
 bool acceptData = false;
 int powerStatus = 0;
+int thermalProtection = 0;
 unsigned int loopToSleep = 0;
 
 //Variables for front side button
@@ -56,6 +57,8 @@ int Vo2;
 float R1 = 10000;
 float logR2, R2, T1, T2;
 float c1 = 1.306013916e-03, c2 = 2.136446243e-04, c3 = 1.035851727e-07;
+float thermalShutdown = 70.00;
+float thermalRestart = 65.00;
 
 // the setup function runs once when you press reset or power the board
 void setup() {
@@ -145,6 +148,7 @@ void PowerDown(){
   Serial.println("Powering Down...");
    digitalWrite(12, 0);
    powerStatus = 0;
+   thermalProtection = 0;
    delay(1000);
 }
 
@@ -178,6 +182,30 @@ void FrontPowerButton() {
  *
  * Thermistor checking function
  */
+void ThermalProtection(){
+ if(T1 > thermalShutdown || T2 > thermalShutdown){
+   Serial.println("Thermal Protection ON!!!");
+   digitalWrite(12, 0);
+   thermalProtection = 1;
+ }
+ if (thermalProtection == 1 && powerStatus == 1){
+    digitalWrite(PowerLed, HIGH);
+    delay(1000);
+    digitalWrite(PowerLed, LOW);
+    delay(1000);
+    if(T1 < thermalRestart && T2 < thermalRestart){
+      Serial.println("Thermal Protection OFF :)");
+      digitalWrite(12, 1);
+      thermalProtection = 0;
+    }
+ }
+}
+
+/*
+ * TemperatureCheck Function
+ *
+ * Thermistor checking function
+ */
 void TemperatureCheck(){
   Vo1 = analogRead(Thermistor1Pin);
   Vo2 = analogRead(Thermistor2Pin);
@@ -200,6 +228,9 @@ void TemperatureCheck(){
   Serial.print("Temperature 2: "); 
   Serial.print(T2);
   Serial.println(" C"); 
+
+  //RUN thermal protection routine
+  ThermalProtection();
 }
 
 /*
@@ -282,7 +313,9 @@ void TemperatureCheck(){
 void loop() {
   FrontPowerButton();
   IrReceiverHandle();
-  TemperatureCheck();
+  if (powerStatus == 1){
+    TemperatureCheck();
+  }
   delay(50);
   // Looping some cycles before going to sleep
   loopToSleep++;
