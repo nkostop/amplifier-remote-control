@@ -47,7 +47,6 @@ unsigned int loopToSleep = 0;
 int PowerPin = 2;
 int PowerLed = 8;
 int powerButtonState;
-int prevPowerButtonState = HIGH;
 
 // Variables for thermistors
 int Thermistor1Pin = 0;
@@ -57,8 +56,10 @@ int Vo2;
 float R1 = 10000;
 float logR2, R2, T1, T2;
 float c1 = 1.306013916e-03, c2 = 2.136446243e-04, c3 = 1.035851727e-07;
-float thermalShutdown = 75.00;
+float thermalShutdown = 73.00;
 float thermalRestart = 65.00;
+int thermalCounter = 1;
+int thermalTimer = 0;
 
 // the setup function runs once when you press reset or power the board
 void setup() {
@@ -67,6 +68,7 @@ void setup() {
   pinMode(12, OUTPUT);
   pinMode(PowerPin, INPUT_PULLUP);
   pinMode(PowerLed, OUTPUT);
+  powerStatus = 0;
 
     Serial.begin(115200);
 #if defined(__AVR_ATmega32U4__) || defined(SERIAL_PORT_USBVIRTUAL) || defined(SERIAL_USB) || defined(ARDUINO_attiny3217)
@@ -117,7 +119,7 @@ void wakeUp(){
 void GoingToSleep(){
   Serial.println("Going to sleep!");
   sleep_enable();
-  attachInterrupt(0,PowerUp,LOW);
+  attachInterrupt(0,wakeUp,LOW);
   attachInterrupt(1,wakeUp,LOW);
   set_sleep_mode(SLEEP_MODE_PWR_DOWN);
   digitalWrite(13, HIGH);
@@ -136,7 +138,7 @@ void PowerUp(){
   Serial.println("Powering Up...");
   digitalWrite(12, 1);
   powerStatus = 1;
-  delay(1000);
+  delay(500);
 }
 
 /*
@@ -149,7 +151,7 @@ void PowerDown(){
    digitalWrite(12, 0);
    powerStatus = 0;
    thermalProtection = 0;
-   delay(1000);
+   delay(500);
 }
 
 /*
@@ -161,7 +163,7 @@ void FrontPowerButton() {
   //PowerButton
    digitalWrite(PowerLed, LOW);
    powerButtonState = digitalRead(PowerPin);
-   if(powerButtonState != prevPowerButtonState){
+   if(powerButtonState == 0){
     if (powerStatus) {
       PowerDown();
      } else {
@@ -184,9 +186,15 @@ void FrontPowerButton() {
  */
 void ThermalProtection(){
  if(T1 > thermalShutdown || T2 > thermalShutdown){
-   Serial.println("Thermal Protection ON!!!");
-   digitalWrite(12, 0);
-   thermalProtection = 1;
+   // Start thermal timer and check thermal counter
+   if(thermalTimer > thermalCounter){
+      Serial.println("Thermal Protection ON!!!");
+      digitalWrite(12, 0);
+      thermalProtection = 1;
+   }
+   thermalTimer++;
+ } else {
+   thermalTimer = 0;
  }
  if (thermalProtection == 1 && powerStatus == 1){
     digitalWrite(PowerLed, HIGH);
@@ -197,6 +205,7 @@ void ThermalProtection(){
       Serial.println("Thermal Protection OFF :)");
       digitalWrite(12, 1);
       thermalProtection = 0;
+      thermalTimer = 0;
     }
  }
 }
@@ -297,7 +306,6 @@ void TemperatureCheck(){
                    IrReceiver.stop();
                   PowerUp();
                 }
-                delay(500);
                 IrReceiver.start();
                 break;
               default:
