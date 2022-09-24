@@ -56,7 +56,7 @@ int Vo2;
 float R1 = 10000;
 float logR2, R2, T1, T2;
 float c1 = 1.306013916e-03, c2 = 2.136446243e-04, c3 = 1.035851727e-07;
-float thermalShutdown = 73.00;
+float thermalShutdown = 74.00;
 float thermalRestart = 65.00;
 int thermalCounter = 1;
 int thermalTimer = 0;
@@ -103,9 +103,6 @@ void setup() {
  */
 void wakeUp(){
   Serial.println("Interupt fired!");
-  sleep_disable();
-  detachInterrupt(0);
-  detachInterrupt(1);
 }
 
 /*
@@ -119,12 +116,15 @@ void wakeUp(){
 void GoingToSleep(){
   Serial.println("Going to sleep!");
   sleep_enable();
-  attachInterrupt(0,wakeUp,LOW);
-  attachInterrupt(1,wakeUp,LOW);
+  attachInterrupt(0,wakeUp,FALLING);
+  attachInterrupt(1,wakeUp,FALLING);
   set_sleep_mode(SLEEP_MODE_PWR_DOWN);
   digitalWrite(13, HIGH);
   delay(1000);
   sleep_cpu();
+  sleep_disable();
+  detachInterrupt(0);
+  detachInterrupt(1);
   Serial.println("Just woke up!");
   
 }
@@ -280,17 +280,20 @@ void TemperatureCheck(){
           switch (command) {
             case ACCEPT_DATA_CODE:
               acceptData = true;
+              Serial.println("Accepting data from remote");
               // statements
               break;
             case DENY_DATA_CODE_1:
               // Deny all data
               // statements
               acceptData = false;
+              Serial.println("Stop accepting data from remote");
               break;
             case DENY_DATA_CODE_2:
               // Deny all data
               // statements
               acceptData = false;
+              Serial.println("Stop accepting data from remote");
               break;
             default:
               // statements
@@ -327,7 +330,7 @@ void loop() {
   delay(50);
   // Looping some cycles before going to sleep
   loopToSleep++;
-  if(loopToSleep == 10){
+  if(loopToSleep == 100){
     loopToSleep = 0;
     // Going to sleep only on power off status
     if (powerStatus == 0){
