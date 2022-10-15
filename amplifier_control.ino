@@ -54,12 +54,15 @@ int Thermistor2Pin = 1;
 int Vo1;
 int Vo2;
 float R1 = 10000;
-float logR2, R2, T1, T2;
+float average, T1, T2;
 float c1 = 1.306013916e-03, c2 = 2.136446243e-04, c3 = 1.035851727e-07;
 float thermalShutdown = 74.00;
 float thermalRestart = 65.00;
 int thermalCounter = 1;
 int thermalTimer = 0;
+int lowThermalTimer = 0;
+int lowThermalCounter = 30;
+float lowThermal = 50;
 
 // the setup function runs once when you press reset or power the board
 void setup() {
@@ -126,6 +129,7 @@ void GoingToSleep(){
   detachInterrupt(0);
   detachInterrupt(1);
   Serial.println("Just woke up!");
+  digitalWrite(13, LOW);
   
 }
 
@@ -211,6 +215,39 @@ void ThermalProtection(){
 }
 
 /*
+ * LowTempChecker Function
+ *
+ * Thermistor checking function
+ */
+void LowTempChecker(){
+ if(T2 < lowThermal || T2 < lowThermal){
+   // Start thermal timer and check thermal counter
+   if(lowThermalTimer < lowThermalCounter){
+      lowThermalTimer++;
+   } else {
+     Serial.println("Low Temperature...");
+      lowThermalTimer = 0;
+      digitalWrite(PowerLed, 0);
+      delay(50);
+      digitalWrite(PowerLed, 1);
+      delay(50);
+      digitalWrite(PowerLed, 0);
+      delay(50);
+      digitalWrite(PowerLed, 1);
+      delay(50);
+      digitalWrite(PowerLed, 0);
+      delay(50);
+      digitalWrite(PowerLed, 1);
+      delay(50);
+      digitalWrite(PowerLed, 0);
+      delay(50);
+      digitalWrite(PowerLed, 1);
+   }
+  
+ }
+}
+
+/*
  * TemperatureCheck Function
  *
  * Thermistor checking function
@@ -218,27 +255,42 @@ void ThermalProtection(){
 void TemperatureCheck(){
   Vo1 = analogRead(Thermistor1Pin);
   Vo2 = analogRead(Thermistor2Pin);
+
+
   //Calculating Thermistor 1
-  R2 = R1 * (1023.0 / (float)Vo1 - 1.0);
-  logR2 = log(R2);
-  T1 = (1.0 / (c1 + c2*logR2 + c3*logR2*logR2*logR2));
-  T1 = T1 - 273.15;
+  average = (1023 / (float)Vo1 - 1.0);
+  average = 10000 / average;
+  // Serial.print("Thermistor resistance ");
+  // Serial.println(average);
+  T1 = average / 10000;
+  T1 = log(T1);
+  T1 /= 4300;
+  T1 += 1.0 / (25 + 273.15);
+  T1 = 1.0 / T1;
+  T1 -= 273.15;
 
   Serial.print("Temperature 1: "); 
   Serial.print(T1);
   Serial.println(" C"); 
 
   //Calculating Thermistor 2
-  R2 = R1 * (1023.0 / (float)Vo2 - 1.0);
-  logR2 = log(R2);
-  T2 = (1.0 / (c1 + c2*logR2 + c3*logR2*logR2*logR2));
-  T2 = T2 - 273.15;
+  average = (1023 / (float)Vo2 - 1.0);
+  average = 10000 / average;
+  // Serial.print("Thermistor resistance ");
+  // Serial.println(average);
+  T2 = average / 10000;
+  T2 = log(T2);
+  T2 /= 4300;
+  T2 += 1.0 / (25 + 273.15);
+  T2 = 1.0 / T2;
+  T2 -= 273.15;
 
   Serial.print("Temperature 2: "); 
   Serial.print(T2);
   Serial.println(" C"); 
 
   //RUN thermal protection routine
+  LowTempChecker();
   ThermalProtection();
 }
 
