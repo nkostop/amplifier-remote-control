@@ -220,7 +220,7 @@ void ThermalProtection(){
  * Thermistor checking function
  */
 void LowTempChecker(){
- if(T1 < lowThermal && T2 < lowThermal){
+ if(T1 < lowThermal || T2 < lowThermal){
    // Start thermal timer and check thermal counter
    if(lowThermalTimer < lowThermalCounter){
       lowThermalTimer++;
