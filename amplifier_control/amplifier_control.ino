@@ -37,46 +37,28 @@
 
 #include <IRremote.h>
 
-// variables for enabling relays
+// ============ Power State ============
+bool powerStatus = false;
+bool thermalProtectionActive = false;
 bool acceptData = true;
-int powerStatus = 0;
-unsigned int loopToSleep = 0;
-
-// variables for raspberry connection
-int RaspPowerPin = 10;
-
-//Variables for front side button
-int PowerPin = 2;
-int RelayPin = 12;
-int PowerLed = 8;
 int powerButtonState;
 
+// ============ Thermal State ============
+float T1, T2;                 // Current temperature readings
+int thermalTimer = 0;         // Counter for shutdown delay
+int lowThermalTimer = 0;      // Counter for low temp warning
 
-// Variables for thermistors
-const float R1 = 10000.0;          // series resistor (10 kΩ)
-const float THERMISTOR_NOMINAL = 10000.0; // 10 kΩ at 25 °C
-const float B_COEFFICIENT = 4300.0;       // from B57045K103K datasheet
-const float T0_KELVIN = 25.0 + 273.15;    // 25 °C in Kelvin
-int thermalProtection = 0;
-int Thermistor1Pin = 0;
-int Thermistor2Pin = 1;
-float T1, T2;
-float thermalShutdown = 74.00;
-float thermalRestart = 65.00;
-int thermalCounter = 1;
-int thermalTimer = 0;
-int lowThermalTimer = 0;
-int lowThermalCounter = 30;
-float lowThermal = 50;
+// ============ Sleep State ============
+unsigned int loopToSleep = 0;
 
 // the setup function runs once when you press reset or power the board
 void setup() {
   // initialize digital pin LED_BUILTIN as an output.
-  pinMode(13, OUTPUT);
-  pinMode(12, OUTPUT);
-  pinMode(PowerPin, INPUT_PULLUP);
-  pinMode(PowerLed, OUTPUT);
-  powerStatus = 0;
+  pinMode(ALTERNATIVE_IR_FEEDBACK_LED_PIN, OUTPUT);
+  pinMode(RELAY_PIN, OUTPUT);
+  pinMode(POWER_PIN, INPUT_PULLUP);
+  pinMode(POWER_LED_PIN, OUTPUT);
+  powerStatus = false;
 
     Serial.begin(115200);
 #if defined(__AVR_ATmega32U4__) || defined(SERIAL_PORT_USBVIRTUAL) || defined(SERIAL_USB) || defined(ARDUINO_attiny3217)
@@ -127,7 +109,7 @@ void GoingToSleep(){
   attachInterrupt(0,wakeUp,FALLING);
   attachInterrupt(1,wakeUp,FALLING);
   set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-  digitalWrite(13, HIGH);
+  digitalWrite(ALTERNATIVE_IR_FEEDBACK_LED_PIN, HIGH);
   delay(1000);
   sleep_cpu();
   sleep_disable();
@@ -143,9 +125,9 @@ void GoingToSleep(){
  */
 void PowerUp(){
   Serial.println("Powering Up...");
-  powerStatus = 1;
-  digitalWrite(RelayPin, HIGH);
-  digitalWrite(PowerLed, HIGH);
+  powerStatus = true;
+  digitalWrite(RELAY_PIN, HIGH);
+  digitalWrite(POWER_LED_PIN, HIGH);
 }
 
 /*
@@ -155,9 +137,9 @@ void PowerUp(){
  */
 void PowerDown(){
   Serial.println("Powering Down...");
-  powerStatus = 0;
-  digitalWrite(RelayPin, LOW);
-  digitalWrite(PowerLed, LOW);
+  powerStatus = false;
+  digitalWrite(RELAY_PIN, LOW);
+  digitalWrite(POWER_LED_PIN, LOW);
 }
 /*
  * FrontPanelButton Function
@@ -166,7 +148,7 @@ void PowerDown(){
  */
 void FrontPowerButton() {
   //PowerButton
-   powerButtonState = digitalRead(PowerPin);
+   powerButtonState = digitalRead(POWER_PIN);
    if(powerButtonState == 0){
     if (powerStatus) {
       PowerDown();
@@ -178,10 +160,10 @@ void FrontPowerButton() {
 
   //  LED
    if (powerStatus) {
-    digitalWrite(PowerLed, HIGH);
+    digitalWrite(POWER_LED_PIN, HIGH);
    } else {
-    digitalWrite(PowerLed, LOW);
-   }  
+    digitalWrite(POWER_LED_PIN, LOW);
+   }
 }
 
 /*
@@ -241,25 +223,24 @@ void FrontPowerButton() {
               // statements
               break;
           }
-          if(acceptData == true){
+          if(acceptData){
              switch (command) {
               Serial.println("Accepting Commands");
               Serial.println(command);
               case POWER_CODE:
                 IrReceiver.stop();
-                if(powerStatus == 1){
+                if(powerStatus){
                  PowerDown();
                 } else {
-                   IrReceiver.stop();
                   PowerUp();
                 }
                 delay(500);
                 IrReceiver.start();
-                break; 
+                break;
               default:
                 // statements
                 break;
-            }    
+            }
           }
         }
     }
@@ -271,26 +252,26 @@ void FrontPowerButton() {
  * Thermistor checking function
  */
 void ThermalProtection(){
- if(T1 > thermalShutdown || T2 > thermalShutdown){
+ if(T1 > THERMAL_SHUTDOWN_TEMP || T2 > THERMAL_SHUTDOWN_TEMP){
    // Start thermal timer and check thermal counter
-   if(thermalTimer > thermalCounter){
+   if(thermalTimer > THERMAL_SHUTDOWN_DELAY){
       Serial.println("Thermal Protection ON!!!");
-      digitalWrite(12, 0);
-      thermalProtection = 1;
+      digitalWrite(RELAY_PIN, LOW);
+      thermalProtectionActive = true;
    }
    thermalTimer++;
  } else {
    thermalTimer = 0;
  }
- if (thermalProtection == 1 && powerStatus == 1){
-    digitalWrite(PowerLed, HIGH);
+ if (thermalProtectionActive && powerStatus){
+    digitalWrite(POWER_LED_PIN, HIGH);
     delay(1000);
-    digitalWrite(PowerLed, LOW);
+    digitalWrite(POWER_LED_PIN, LOW);
     delay(1000);
-    if(T1 < thermalRestart && T2 < thermalRestart){
+    if(T1 < THERMAL_RESTART_TEMP && T2 < THERMAL_RESTART_TEMP){
       Serial.println("Thermal Protection OFF :)");
-      digitalWrite(12, 1);
-      thermalProtection = 0;
+      digitalWrite(RELAY_PIN, HIGH);
+      thermalProtectionActive = false;
       thermalTimer = 0;
     }
  }
@@ -302,30 +283,21 @@ void ThermalProtection(){
  * Thermistor checking function
  */
 void LowTempChecker(){
- if(T1 < lowThermal || T2 < lowThermal){
+ if(T1 < THERMAL_LOW_TEMP || T2 < THERMAL_LOW_TEMP){
    // Start thermal timer and check thermal counter
-   if(lowThermalTimer < lowThermalCounter){
+   if(lowThermalTimer < LOW_THERMAL_CHECK_INTERVAL){
       lowThermalTimer++;
    } else {
      Serial.println("Low Temperature...");
       lowThermalTimer = 0;
-      digitalWrite(PowerLed, 0);
-      delay(50);
-      digitalWrite(PowerLed, 1);
-      delay(50);
-      digitalWrite(PowerLed, 0);
-      delay(50);
-      digitalWrite(PowerLed, 1);
-      delay(50);
-      digitalWrite(PowerLed, 0);
-      delay(50);
-      digitalWrite(PowerLed, 1);
-      delay(50);
-      digitalWrite(PowerLed, 0);
-      delay(50);
-      digitalWrite(PowerLed, 1);
+      // Flash LED 4 times to indicate low temperature
+      for(int i = 0; i < 4; i++){
+        digitalWrite(POWER_LED_PIN, LOW);
+        delay(50);
+        digitalWrite(POWER_LED_PIN, HIGH);
+        delay(50);
+      }
    }
-  
  }
 }
 
@@ -345,21 +317,21 @@ float ReadThermistorC(int pin) {
   float resistance = 0;
 
   if (THERMISTOR_WIRING_NUMBER == 0){
-    resistance = R1 * (1023.0 / adc - 1.0);
+    resistance = THERMISTOR_SERIES_RESISTOR * (1023.0 / adc - 1.0);
   } else if (THERMISTOR_WIRING_NUMBER == 1) {
     // +5V -> R1 (10k) -> analog pin -> thermistor -> GND
-    resistance = R1 * (float)adc / (1023.0 - (float)adc);
+    resistance = THERMISTOR_SERIES_RESISTOR * (float)adc / (1023.0 - (float)adc);
   } else {
     Serial.println("Wrong thermistor wiring chosen");
   }
 
   // --- Beta equation for EPCOS B57045K103K ---
-  float steinhart = resistance / THERMISTOR_NOMINAL; // R/R0
-  steinhart = log(steinhart);                        // ln(R/R0)
-  steinhart /= B_COEFFICIENT;                        // 1/B * ln(R/R0)
-  steinhart += 1.0 / T0_KELVIN;                      // + 1/T0
-  steinhart = 1.0 / steinhart;                       // invert -> Kelvin
-  steinhart -= 273.15;                               // Kelvin -> °C
+  float steinhart = resistance / THERMISTOR_NOMINAL;    // R/R0
+  steinhart = log(steinhart);                           // ln(R/R0)
+  steinhart /= THERMISTOR_B_COEFFICIENT;                // 1/B * ln(R/R0)
+  steinhart += 1.0 / THERMISTOR_T0_KELVIN;              // + 1/T0
+  steinhart = 1.0 / steinhart;                          // invert -> Kelvin
+  steinhart -= 273.15;                                  // Kelvin -> °C
 
   return steinhart;
 }
@@ -370,8 +342,8 @@ float ReadThermistorC(int pin) {
  * Thermistor checking function
  */
 void TemperatureCheck(){
-  T1 = ReadThermistorC(Thermistor1Pin);
-  T2 = ReadThermistorC(Thermistor2Pin);
+  T1 = ReadThermistorC(THERMISTOR1_PIN);
+  T2 = ReadThermistorC(THERMISTOR2_PIN);
 
   Serial.print("Temperature 1: ");
   Serial.print(T1);
@@ -390,16 +362,16 @@ void TemperatureCheck(){
 void loop() {
   FrontPowerButton();
   IrReceiverHandle();
-  if (powerStatus == 1){
+  if (powerStatus){
     TemperatureCheck();
   }
   delay(50);
   // Looping some cycles before going to sleep
   loopToSleep++;
-  if(loopToSleep == 100){
+  if(loopToSleep == SLEEP_LOOP_COUNT){
     loopToSleep = 0;
     // Going to sleep only on power off status
-    if (powerStatus == 0){
+    if (!powerStatus){
       GoingToSleep();
     }
   }
