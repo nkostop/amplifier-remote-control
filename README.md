@@ -63,7 +63,7 @@ Remote control for audio amplifier using front panel push/LED switch, relay for 
 ```
 
 ## Hardware
-- Arduino Mini Pro 5V (https://www.sparkfun.com/products/11113)
+- Arduino Nano (tested) or Arduino Mini Pro 5V (https://www.sparkfun.com/products/11113)
 - IR Receiver Diode - TSOP38238 (https://www.sparkfun.com/products/10266)
 - Infrared Remote Control (https://www.sparkfun.com/products/14865)
 - Thermistors EPCOS B57045K103K (https://gr.mouser.com/ProductDetail/EPCOS-TDK/B57045K103K) - [Datasheet](http://grobotronics.com/images/companies/1/B57045.pdf)
@@ -142,7 +142,7 @@ git clone https://github.com/nkostop/amplifier-remote-control.git
 
 ### 2. Install Arduino IDE
 
-Download and install from https://www.arduino.cc/en/software
+Download and install version **2.3.6** from https://www.arduino.cc/en/software
 
 ### 3. Install required libraries
 
@@ -170,8 +170,8 @@ Follow the schematic in `RemoteControl.pdf` for wiring details.
 
 ### 6. Upload firmware
 
-1. Select **Tools > Board > Arduino Pro or Pro Mini**
-2. Select **Tools > Processor > ATmega328P (5V, 16MHz)**
+1. Select **Tools > Board > Arduino Nano**
+2. Select **Tools > Processor > ATmega328P (Old Bootloader)**
 3. Select the correct **Tools > Port**
 4. Click **Upload**
 
