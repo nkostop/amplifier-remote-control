@@ -106,15 +106,37 @@ All configuration is centralized in `PinDefinitionsAndMore.h`:
 | `DENY_DATA_CODE_1` | 0x40 | Disable IR command processing |
 | `DENY_DATA_CODE_2` | 0x44 | Disable IR command processing (alt) |
 
+### Thermistor Wiring
+
+The thermistors form a voltage divider with a fixed series resistor. Two wiring modes are supported:
+
+**Mode 0** - Thermistor on high side:
+```
++5V ---- [Thermistor] ----+---- [10kΩ Resistor] ---- GND
+                          |
+                       Analog Pin (A0/A1)
+```
+
+**Mode 1 (default, tested)** - Thermistor on low side:
+```
++5V ---- [10kΩ Resistor] ----+---- [Thermistor] ---- GND
+                             |
+                          Analog Pin (A0/A1)
+```
+
+Set `THERMISTOR_WIRING_NUMBER` to match your circuit (0 or 1).
+
 ### Thermistor Calibration
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `THERMISTOR_WIRING_NUMBER` | 1 | Wiring mode (0 or 1, see code comments) |
-| `THERMISTOR_SERIES_RESISTOR` | 10000.0 | Series resistor value in ohms |
-| `THERMISTOR_NOMINAL` | 10000.0 | Thermistor resistance at 25°C |
+| `THERMISTOR_WIRING_NUMBER` | 1 | Wiring mode (0 or 1, see diagrams above) |
+| `THERMISTOR_SERIES_RESISTOR` | 10000.0 | Series resistor value in ohms (10kΩ) |
+| `THERMISTOR_NOMINAL` | 10000.0 | Thermistor resistance at 25°C (10kΩ NTC) |
 | `THERMISTOR_B_COEFFICIENT` | 4300.0 | Beta coefficient from datasheet |
 | `THERMISTOR_T0_KELVIN` | 298.15 | Reference temperature in Kelvin (25°C) |
+
+**Note:** If using a different thermistor, update `THERMISTOR_NOMINAL` and `THERMISTOR_B_COEFFICIENT` from its datasheet. The B coefficient is critical for accurate temperature readings.
 
 ### Thermal Protection
 
