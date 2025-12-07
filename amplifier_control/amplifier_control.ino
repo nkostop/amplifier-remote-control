@@ -38,24 +38,29 @@
 #include <IRremote.h>
 
 // variables for enabling relays
-bool acceptData = false;
+bool acceptData = true;
 int powerStatus = 0;
-int thermalProtection = 0;
 unsigned int loopToSleep = 0;
+
+// variables for raspberry connection
+int RaspPowerPin = 10;
 
 //Variables for front side button
 int PowerPin = 2;
+int RelayPin = 12;
 int PowerLed = 8;
 int powerButtonState;
 
+
 // Variables for thermistors
+const float R1 = 10000.0;          // series resistor (10 kΩ)
+const float THERMISTOR_NOMINAL = 10000.0; // 10 kΩ at 25 °C
+const float B_COEFFICIENT = 4300.0;       // from B57045K103K datasheet
+const float T0_KELVIN = 25.0 + 273.15;    // 25 °C in Kelvin
+int thermalProtection = 0;
 int Thermistor1Pin = 0;
 int Thermistor2Pin = 1;
-int Vo1;
-int Vo2;
-float R1 = 10000;
-float average, T1, T2;
-float c1 = 1.306013916e-03, c2 = 2.136446243e-04, c3 = 1.035851727e-07;
+float T1, T2;
 float thermalShutdown = 74.00;
 float thermalRestart = 65.00;
 int thermalCounter = 1;
@@ -129,8 +134,6 @@ void GoingToSleep(){
   detachInterrupt(0);
   detachInterrupt(1);
   Serial.println("Just woke up!");
-  digitalWrite(13, LOW);
-  
 }
 
 /*
@@ -140,9 +143,9 @@ void GoingToSleep(){
  */
 void PowerUp(){
   Serial.println("Powering Up...");
-  digitalWrite(12, 1);
   powerStatus = 1;
-  delay(500);
+  digitalWrite(RelayPin, HIGH);
+  digitalWrite(PowerLed, HIGH);
 }
 
 /*
@@ -152,12 +155,10 @@ void PowerUp(){
  */
 void PowerDown(){
   Serial.println("Powering Down...");
-   digitalWrite(12, 0);
-   powerStatus = 0;
-   thermalProtection = 0;
-   delay(500);
+  powerStatus = 0;
+  digitalWrite(RelayPin, LOW);
+  digitalWrite(PowerLed, LOW);
 }
-
 /*
  * FrontPanelButton Function
  *
@@ -165,7 +166,6 @@ void PowerDown(){
  */
 void FrontPowerButton() {
   //PowerButton
-   digitalWrite(PowerLed, LOW);
    powerButtonState = digitalRead(PowerPin);
    if(powerButtonState == 0){
     if (powerStatus) {
@@ -173,6 +173,7 @@ void FrontPowerButton() {
      } else {
       PowerUp();
      }
+     delay(500);
    }
 
   //  LED
@@ -184,6 +185,87 @@ void FrontPowerButton() {
 }
 
 /*
+ * IrReceiverHandle Function
+ *
+ * Power off the equipment
+ */
+ void IrReceiverHandle() {
+   /*
+     * Check if received data is available and if yes, try to decode it.
+     * Decoded result is in the IrReceiver.decodedIRData structure.
+     *
+     * E.g. command is in IrReceiver.decodedIRData.command
+     * address is in command is in IrReceiver.decodedIRData.address
+     * and up to 32 bit raw data in IrReceiver.decodedIRData.decodedRawData
+     */
+    if (IrReceiver.decode()) {
+        if (IrReceiver.decodedIRData.flags & IRDATA_FLAGS_WAS_OVERFLOW) {
+            IrReceiver.decodedIRData.flags = false; // yes we have recognized the flag :-)
+            Serial.println(F("Overflow detected"));
+        } else {
+            // Print a short summary of received data
+            IrReceiver.printIRResultShort(&Serial);
+        }
+
+        Serial.println();
+        /*
+         * !!!Important!!! Enable receiving of the next value,
+         * since receiving has stopped after the end of the current received data packet.
+         */
+        IrReceiver.resume();
+
+        /*
+         * Finally check the received data and perform actions according to the received address and commands
+         */
+        if (IrReceiver.decodedIRData.address == IR_ADDRESS) {
+          int command = IrReceiver.decodedIRData.command;
+          switch (command) {
+            case ACCEPT_DATA_CODE:
+              acceptData = true;
+              Serial.println("Accepting data from remote");
+              // statements
+              break;
+            case DENY_DATA_CODE_1:
+              // Deny all data
+              // statements
+              acceptData = false;
+              Serial.println("Stop accepting data from remote");
+              break;
+            case DENY_DATA_CODE_2:
+              // Deny all data
+              // statements
+              acceptData = false;
+              Serial.println("Stop accepting data from remote");
+              break;
+            default:
+              // statements
+              break;
+          }
+          if(acceptData == true){
+             switch (command) {
+              Serial.println("Accepting Commands");
+              Serial.println(command);
+              case POWER_CODE:
+                IrReceiver.stop();
+                if(powerStatus == 1){
+                 PowerDown();
+                } else {
+                   IrReceiver.stop();
+                  PowerUp();
+                }
+                delay(500);
+                IrReceiver.start();
+                break; 
+              default:
+                // statements
+                break;
+            }    
+          }
+        }
+    }
+ }
+
+ /*
  * TemperatureCheck Function
  *
  * Thermistor checking function
@@ -248,129 +330,61 @@ void LowTempChecker(){
 }
 
 /*
+ * ReadThermistorC Function
+ *
+ * Thermistor reading function
+ */
+float ReadThermistorC(int pin) {
+  int adc = analogRead(pin);
+
+  // guard against extreme / broken readings
+  if (adc <= 0 || adc >= 1023) {
+    return NAN;
+  }
+
+  float resistance = 0;
+
+  if (THERMISTOR_WIRING_NUMBER == 0){
+    resistance = R1 * (1023.0 / adc - 1.0);
+  } else if (THERMISTOR_WIRING_NUMBER == 1) {
+    // +5V -> R1 (10k) -> analog pin -> thermistor -> GND
+    resistance = R1 * (float)adc / (1023.0 - (float)adc);
+  } else {
+    Serial.println("Wrong thermistor wiring chosen");
+  }
+
+  // --- Beta equation for EPCOS B57045K103K ---
+  float steinhart = resistance / THERMISTOR_NOMINAL; // R/R0
+  steinhart = log(steinhart);                        // ln(R/R0)
+  steinhart /= B_COEFFICIENT;                        // 1/B * ln(R/R0)
+  steinhart += 1.0 / T0_KELVIN;                      // + 1/T0
+  steinhart = 1.0 / steinhart;                       // invert -> Kelvin
+  steinhart -= 273.15;                               // Kelvin -> °C
+
+  return steinhart;
+}
+
+/*
  * TemperatureCheck Function
  *
  * Thermistor checking function
  */
 void TemperatureCheck(){
-  Vo1 = analogRead(Thermistor1Pin);
-  Vo2 = analogRead(Thermistor2Pin);
+  T1 = ReadThermistorC(Thermistor1Pin);
+  T2 = ReadThermistorC(Thermistor2Pin);
 
-
-  //Calculating Thermistor 1
-  average = (1023 / (float)Vo1 - 1.0);
-  average = 10000 / average;
-  // Serial.print("Thermistor resistance ");
-  // Serial.println(average);
-  T1 = average / 10000;
-  T1 = log(T1);
-  T1 /= 4300;
-  T1 += 1.0 / (25 + 273.15);
-  T1 = 1.0 / T1;
-  T1 -= 273.15;
-
-  Serial.print("Temperature 1: "); 
+  Serial.print("Temperature 1: ");
   Serial.print(T1);
-  Serial.println(" C"); 
+  Serial.println(" C");
 
-  //Calculating Thermistor 2
-  average = (1023 / (float)Vo2 - 1.0);
-  average = 10000 / average;
-  // Serial.print("Thermistor resistance ");
-  // Serial.println(average);
-  T2 = average / 10000;
-  T2 = log(T2);
-  T2 /= 4300;
-  T2 += 1.0 / (25 + 273.15);
-  T2 = 1.0 / T2;
-  T2 -= 273.15;
-
-  Serial.print("Temperature 2: "); 
+  Serial.print("Temperature 2: ");
   Serial.print(T2);
-  Serial.println(" C"); 
+  Serial.println(" C");
 
-  //RUN thermal protection routine
   LowTempChecker();
   ThermalProtection();
 }
 
-/*
- * IrReceiverHandle Function
- *
- * Power off the equipment
- */
- void IrReceiverHandle() {
-   /*
-     * Check if received data is available and if yes, try to decode it.
-     * Decoded result is in the IrReceiver.decodedIRData structure.
-     *
-     * E.g. command is in IrReceiver.decodedIRData.command
-     * address is in command is in IrReceiver.decodedIRData.address
-     * and up to 32 bit raw data in IrReceiver.decodedIRData.decodedRawData
-     */
-    if (IrReceiver.decode()) {
-        if (IrReceiver.decodedIRData.flags & IRDATA_FLAGS_WAS_OVERFLOW) {
-            IrReceiver.decodedIRData.flags = false; // yes we have recognized the flag :-)
-            Serial.println(F("Overflow detected"));
-        } else {
-            // Print a short summary of received data
-            IrReceiver.printIRResultShort(&Serial);
-        }
-
-        Serial.println();
-        /*
-         * !!!Important!!! Enable receiving of the next value,
-         * since receiving has stopped after the end of the current received data packet.
-         */
-        IrReceiver.resume();
-
-        /*
-         * Finally check the received data and perform actions according to the received address and commands
-         */
-        if (IrReceiver.decodedIRData.address == 0) {
-          int command = IrReceiver.decodedIRData.command;
-          switch (command) {
-            case ACCEPT_DATA_CODE:
-              acceptData = true;
-              Serial.println("Accepting data from remote");
-              // statements
-              break;
-            case DENY_DATA_CODE_1:
-              // Deny all data
-              // statements
-              acceptData = false;
-              Serial.println("Stop accepting data from remote");
-              break;
-            case DENY_DATA_CODE_2:
-              // Deny all data
-              // statements
-              acceptData = false;
-              Serial.println("Stop accepting data from remote");
-              break;
-            default:
-              // statements
-              break;
-          }
-          if(acceptData == true){
-             switch (command) {
-              case POWER_CODE:
-                IrReceiver.stop();
-                if(powerStatus == 1){
-                 PowerDown();
-                } else {
-                   IrReceiver.stop();
-                  PowerUp();
-                }
-                IrReceiver.start();
-                break;
-              default:
-                // statements
-                break;
-            }    
-          }
-        }
-    }
- }
 
 // the loop function runs over and over again forever
 void loop() {
