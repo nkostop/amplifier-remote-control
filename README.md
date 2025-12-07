@@ -2,6 +2,66 @@
 
 Remote control for audio amplifier using front panel push/LED switch, relay for power control, IR remote, and thermistors for temperature monitoring.
 
+## Architecture
+
+```
+                                    +------------------+
+                                    |   IR Remote      |
+                                    +--------+---------+
+                                             |
+                                             | IR Signal
+                                             v
++-------------------+              +-------------------+              +-------------------+
+|  Front Panel      |              |  Arduino Mini Pro |              |  Amplifier        |
+|  Button + LED     |<------------>|  5V               |------------->|  (via Relay)      |
++-------------------+   Pin 2,8    +-------------------+    Pin 12    +-------------------+
+                                             ^
+                                             | Pin 3
+                                             |
+                                   +-------------------+
+                                   |  IR Receiver      |
+                                   |  TSOP38238        |
+                                   +-------------------+
+
+                                   +-------------------+
+                                   |  Thermistor 1     |-----> A0
+                                   +-------------------+
+
+                                   +-------------------+
+                                   |  Thermistor 2     |-----> A1
+                                   +-------------------+
+```
+
+### System Flow
+
+```
+                    +-------------+
+                    |    IDLE     |
+                    | (Sleep Mode)|
+                    +------+------+
+                           |
+            IR Signal or Button Press
+                           |
+                           v
+                    +------+------+
+                    |  POWER ON   |
+                    +------+------+
+                           |
+                           v
+         +---------->+-----+------+<----------+
+         |           | MONITORING |           |
+         |           +-----+------+           |
+         |                 |                  |
+    Temp < 65°C      Temp > 74°C         Normal
+         |                 |             Operation
+         |                 v                  |
+         |           +-----+------+           |
+         +-----------|  THERMAL   |-----------+
+                     | PROTECTION |
+                     +------------+
+                     (Relay OFF, LED blinks)
+```
+
 ## Hardware
 - Arduino Mini Pro 5V (https://www.sparkfun.com/products/11113)
 - IR Receiver Diode - TSOP38238 (https://www.sparkfun.com/products/10266)
@@ -72,6 +132,54 @@ All configuration is centralized in `PinDefinitionsAndMore.h`:
 | `LOW_THERMAL_CHECK_INTERVAL` | 30 | Loop cycles between low temp warnings |
 | `SLEEP_LOOP_COUNT` | 100 | Loop cycles before entering sleep mode |
 
-## Instructions
-Follow schematics PDF from repo, download libraries from inside Arduino IDE.
-See also: https://learn.sparkfun.com/tutorials/ir-control-kit-hookup-guide
+## Installation
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/nkostop/amplifier-remote-control.git
+```
+
+### 2. Install Arduino IDE
+
+Download and install from https://www.arduino.cc/en/software
+
+### 3. Install required libraries
+
+Open Arduino IDE, go to **Sketch > Include Library > Manage Libraries** and install:
+- `IRremote` by shirriff (version 4.x)
+
+### 4. Configure the project
+
+1. Open `amplifier_control/amplifier_control.ino` in Arduino IDE
+2. Edit `PinDefinitionsAndMore.h` to match your hardware setup (pin assignments, thermistor values, thermal thresholds)
+
+### 5. Connect hardware
+
+Follow the schematic in `RemoteControl.pdf` for wiring details.
+
+**Quick pin reference:**
+| Component | Arduino Pin |
+|-----------|-------------|
+| IR Receiver (TSOP38238) | D3 |
+| Front Panel Button | D2 |
+| Front Panel LED | D8 |
+| Relay | D12 |
+| Thermistor 1 | A0 |
+| Thermistor 2 | A1 |
+
+### 6. Upload firmware
+
+1. Select **Tools > Board > Arduino Pro or Pro Mini**
+2. Select **Tools > Processor > ATmega328P (5V, 16MHz)**
+3. Select the correct **Tools > Port**
+4. Click **Upload**
+
+### 7. Verify operation
+
+Open **Tools > Serial Monitor** (115200 baud) to see debug output and temperature readings.
+
+## Resources
+
+- [IR Control Kit Hookup Guide](https://learn.sparkfun.com/tutorials/ir-control-kit-hookup-guide)
+- [Schematic](RemoteControl.pdf)
