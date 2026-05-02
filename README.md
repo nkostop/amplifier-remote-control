@@ -205,3 +205,5 @@ Open **Tools > Serial Monitor** (115200 baud) to see debug output and temperatur
 
 - [IR Control Kit Hookup Guide](https://learn.sparkfun.com/tutorials/ir-control-kit-hookup-guide)
 - [Schematic](RemoteControl.pdf)
+
+Made with love from Patras
